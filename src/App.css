@@ -3,40 +3,71 @@
   margin: 0 auto;
   padding: 2rem;
   text-align: center;
+  background-color: #242424;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+.table-container {
+  padding: 20px;
 }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 20px;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
+th, td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid #ddd;
 }
 
-.card {
-  padding: 2em;
+th {
+  background-color: #f5f5f5;
+  color: #242424;
+  cursor: pointer;
 }
 
-.read-the-docs {
-  color: #888;
+th.sortable:hover {
+  background-color: #e5e5e5;
+}
+
+.sort-indicator {
+  margin-left: 5px;
+  font-size: 12px;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+button {
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+select {
+  padding: 5px;
+}
+
+.group-controls {
+  margin-bottom: 10px;
+}
+
+.group-header {
+  background-color: #f0f0f0;
+  font-weight: bold;
+  color: #242424;
+}
+
+.group-header td {
+  padding: 8px;
+  border-top: 2px solid #ddd;
 }
