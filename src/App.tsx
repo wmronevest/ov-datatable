@@ -1,28 +1,23 @@
-import { useState, useMemo } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { useState, useMemo } from 'react';
+import './App.css';
 
-// Updated Pagination Hook
+// Pagination Hook
 const usePagination = (data, initialPageSize = 10) => {
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize, setPageSize] = useState(initialPageSize);
 
     const { totalItems, paginatedData } = useMemo(() => {
-        // Filter out group headers for counting actual data rows
         const dataRows = data.filter(row => !row.isGroupHeader);
         const total = dataRows.length;
         const startIndex = (currentPage - 1) * pageSize;
         const endIndex = startIndex + pageSize;
 
-        // Preserve the original order from sorted data, including group headers
         let paginated = [];
         let dataCount = 0;
 
         for (let i = 0; i < data.length; i++) {
             const row = data[i];
             if (row.isGroupHeader) {
-                // Include group header if it precedes any data row in the range
                 if (dataCount < endIndex) {
                     paginated.push(row);
                 }
@@ -56,7 +51,6 @@ const useMultiSort = (data, groupByColumn = null) => {
 
     const sortedData = useMemo(() => {
         let sortableData = [...data];
-
         if (sortConfig.length > 0 && data.length > 0) {
             const firstRow = data[0];
             const inferredTypes = Object.keys(firstRow).reduce((acc, key) => {
@@ -193,9 +187,100 @@ const useGroupBy = (data, groupByColumn = null) => {
     return groupedData;
 };
 
+// Column Drag Drop Hook
+const useColumnDragDrop = (initialColumns) => {
+    const [columns, setColumns] = useState(initialColumns);
+    const [draggedColumn, setDraggedColumn] = useState(null);
+
+    const handleDragStart = (e, columnAccessor) => {
+        setDraggedColumn(columnAccessor);
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', columnAccessor);
+    };
+
+    const handleDragOver = (e, targetAccessor) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+    };
+
+    const handleDrop = (e, targetAccessor) => {
+        e.preventDefault();
+        if (!draggedColumn || draggedColumn === targetAccessor) {
+            setDraggedColumn(null);
+            return;
+        }
+
+        const newColumns = [...columns];
+        const draggedIndex = newColumns.findIndex(col => col.accessor === draggedColumn);
+        const targetIndex = newColumns.findIndex(col => col.accessor === targetAccessor);
+
+        const [draggedItem] = newColumns.splice(draggedIndex, 1);
+        newColumns.splice(targetIndex, 0, draggedItem);
+
+        setColumns(newColumns);
+        setDraggedColumn(null);
+    };
+
+    const handleDragEnd = () => {
+        setDraggedColumn(null);
+    };
+
+    return {
+        columns,
+        setColumns,
+        handleDragStart,
+        handleDragOver,
+        handleDrop,
+        handleDragEnd,
+        draggedColumn
+    };
+};
+
+// New Column Visibility Hook
+const useColumnVisibility = (initialColumns) => {
+    const [columnVisibility, setColumnVisibility] = useState(() => {
+        return initialColumns.reduce((acc, column) => {
+            acc[column.accessor] = true; // All columns visible by default
+            return acc;
+        }, {});
+    });
+
+    const toggleColumnVisibility = (accessor) => {
+        setColumnVisibility(prev => ({
+            ...prev,
+            [accessor]: !prev[accessor]
+        }));
+    };
+
+    const visibleColumns = useMemo(() => {
+        return initialColumns.filter(column => columnVisibility[column.accessor]);
+    }, [initialColumns, columnVisibility]);
+
+    return {
+        columnVisibility,
+        toggleColumnVisibility,
+        visibleColumns
+    };
+};
+
 // Table Component
-const Table = ({ data, columns }) => {
+const Table = ({ data, columns: initialColumns }) => {
     const [groupByColumn, setGroupByColumn] = useState(null);
+
+    const {
+        columns: draggableColumns,
+        handleDragStart,
+        handleDragOver,
+        handleDrop,
+        handleDragEnd
+    } = useColumnDragDrop(initialColumns);
+
+    const {
+        columnVisibility,
+        toggleColumnVisibility,
+        visibleColumns
+    } = useColumnVisibility(draggableColumns);
+
     const { sortedData, handleSort, getSortIndicator, sortConfig } = useMultiSort(data, groupByColumn);
     const { flatData: groupedData } = useGroupBy(sortedData, groupByColumn);
     const {
@@ -221,18 +306,13 @@ const Table = ({ data, columns }) => {
             >
                 Previous
             </button>
-
-            <span>
-        Page {currentPage} of {totalPages} ({totalItems} items)
-      </span>
-
+            <span>Page {currentPage} of {totalPages} ({totalItems} items)</span>
             <button
                 onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                 disabled={currentPage === totalPages}
             >
                 Next
             </button>
-
             <select
                 value={pageSize}
                 onChange={(e) => {
@@ -251,40 +331,60 @@ const Table = ({ data, columns }) => {
 
     return (
         <div className="table-container">
-            <div className="group-controls">
-                <label>Group by: </label>
-                <select
-                    value={groupByColumn || ''}
-                    onChange={(e) => {
-                        setGroupByColumn(e.target.value || null);
-                        setCurrentPage(1);
-                    }}
-                >
-                    <option value="">None</option>
-                    {columns.map((col) => (
-                        <option key={col.accessor} value={col.accessor}>
-                            {col.header}
-                        </option>
+            <div className="controls">
+                <div className="group-controls">
+                    <label>Group by: </label>
+                    <select
+                        value={groupByColumn || ''}
+                        onChange={(e) => {
+                            setGroupByColumn(e.target.value || null);
+                            setCurrentPage(1);
+                        }}
+                    >
+                        <option value="">None</option>
+                        {visibleColumns.map((col) => (
+                            <option key={col.accessor} value={col.accessor}>
+                                {col.header}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+                <div className="visibility-controls">
+                    <label>Show/Hide Columns: </label>
+                    {draggableColumns.map((column) => (
+                        <label key={column.accessor} className="column-toggle">
+                            <input
+                                type="checkbox"
+                                checked={columnVisibility[column.accessor]}
+                                onChange={() => toggleColumnVisibility(column.accessor)}
+                            />
+                            {column.header}
+                        </label>
                     ))}
-                </select>
+                </div>
             </div>
 
             <table>
                 <thead>
                 <tr>
-                    {columns.map((column) => (
+                    {visibleColumns.map((column) => (
                         <th
                             key={column.accessor}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, column.accessor)}
+                            onDragOver={(e) => handleDragOver(e, column.accessor)}
+                            onDrop={(e) => handleDrop(e, column.accessor)}
+                            onDragEnd={handleDragEnd}
                             onClick={() => {
                                 handleSort(column.accessor);
                                 setCurrentPage(1);
                             }}
-                            className="sortable"
+                            className="sortable draggable"
                         >
                             {column.header}
                             <span className="sort-indicator">
-                  {getSortIndicator(column.accessor)}
-                </span>
+                                    {getSortIndicator(column.accessor)}
+                                </span>
                         </th>
                     ))}
                 </tr>
@@ -293,13 +393,13 @@ const Table = ({ data, columns }) => {
                 {paginatedData.map((row, index) => (
                     row.isGroupHeader ? (
                         <tr key={getRowKey(row, index)} className="group-header">
-                            <td colSpan={columns.length}>
+                            <td colSpan={visibleColumns.length}>
                                 {groupByColumn}: {row.groupKey} ({row.groupSize} items)
                             </td>
                         </tr>
                     ) : (
                         <tr key={getRowKey(row, index)}>
-                            {columns.map((column) => (
+                            {visibleColumns.map((column) => (
                                 <td key={column.accessor}>
                                     {column.cell ? column.cell(row) : row[column.accessor]}
                                 </td>
@@ -315,7 +415,7 @@ const Table = ({ data, columns }) => {
     );
 };
 
-// Example usage
+// App Component
 const App = () => {
     const columns = [
         { header: 'ID', accessor: 'id' },
@@ -338,7 +438,12 @@ const App = () => {
         { id: 6, name: 'Charlie', age: 25, status: 'active' }
     ];
 
-    return <Table data={data} columns={columns} />;
+    return (
+        <div className="App">
+            <h1>Sortable, Groupable, Paginated Table with Drag & Drop and Visibility</h1>
+            <Table data={data} columns={columns} />
+        </div>
+    );
 };
 
 export default App;
